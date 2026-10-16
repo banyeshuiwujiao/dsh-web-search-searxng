@@ -1,0 +1,11 @@
+{
+  "name": "dsh-web-search-searxng",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH (DeepSeek Harness) web-search provider backed by a self-hosted SearXNG JSON API.",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  }
+}
