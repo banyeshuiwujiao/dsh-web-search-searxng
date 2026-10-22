@@ -1,0 +1,56 @@
+# ============================================================================
+# dsh-web-search-searxng —— 自建 SearXNG 作为 web-search provider
+# ============================================================================
+# 本文件是**本插件自带的 bundle patch**（package.json 的 dsh.bundle.patch
+# 指向它）。它随插件一起被 DSH 读取：
+#
+#   · 启用/停用 = profile 的 dsh.profile.bundles 里有没有 dsh-web-search-searxng
+#     （插件页「已安装插件」右侧的开关改的就是那个列表）；
+#   · 本文件里的 config 是插件的**可移植默认值**。profile 的
+#     cordis.patch.yml 可以按 id 覆盖它（覆盖是整块替换，必须列全所有键）。
+#
+# 接入步骤：
+#   1. 接线：把本目录 junction 到 ~/.dsh/profiles/node_modules/dsh-web-search-searxng
+#      （并在本目录下建一个 node_modules junction 指向宿主目录，见 README
+#      「为什么需要插件目录下的 node_modules」）
+#   2. 确认 profile 的 dsh.profile.bundles 里列了 dsh-web-search-searxng
+#      （dsh plugin --profile desktop add link:<本目录> 会自动加）
+#   3. 重启 DeepSeek Harness.exe
+#
+# ⚠️ 为什么 `web` 行的覆盖要放在**这里**而不是 profile patch 里：
+#   `web` 行由 base bundle 提供（searchProvider: deepseek-official）。profile
+#   的 cordis.patch.yml 也能覆盖它，但那样一来**停用本插件就不会撤销覆盖**：
+#   searchProvider 会继续指向 searxng，而 searxng 的 provider 已经没注册，
+#   于是每次搜索都抛 WEB_PROVIDER_CONFIGURED_MISSING。
+#
+#   把覆盖放进本 bundle 的 patch 层之后，停用插件 = 这一整层退出组合 =
+#   `web` 行自动回落到 base 的 deepseek-official。这是唯一自洽的形态。
+#
+#   代价要说清楚：base 的 deepseek-official 需要 DEEPSEEK_API_KEY（或 deepseek
+#   账号态）。本机没有配这个 key，所以**停用本插件后联网搜索会不可用**，
+#   而不是一个可用的回退。这是环境的既有事实，不是本次改动引入的：
+#   官方搜索此前就已经被 `web-search-deepseek` + disabled: true 关掉了。
+#   要么给 DSH 配 DEEPSEEK_API_KEY，要么保持本插件开启。
+# ============================================================================
+
+- insert:
+    - id: web-search-searxng
+      name: 'dsh-web-search-searxng'
+      config:
+        # SearXNG 基址。自建实例的 /search?format=json。
+        # 也可用环境变量 DSH_WEB_SEARXNG_BASE_URL 覆盖。
+        # 2026-10-22：指向首尔服务器（tencent-korea-host）的原生 searxng 实例
+        # （已从 docker 迁出，gunicorn 绑 Tailscale IP），走 Tailscale 内网直连。
+        baseURL: http://100.73.103.73:8080
+        # 搜索分类：general / images / news / videos / map / music / it / science…
+        categories: web
+        # 单次搜索超时（毫秒）。
+        timeoutMs: 30000
+
+# `web` 行由 base bundle 提供（@deepseek-ai/dsh-web）。这里覆盖它选中的
+# search provider —— 覆盖是**整块浅替换**，所以 searchProvider 与
+# fetchProvider 两个键都要写。
+- id: web
+  config:
+    searchProvider: searxng
+    fetchProvider: http
