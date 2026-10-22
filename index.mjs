@@ -46,7 +46,7 @@ function resolveOptions(config) {
     baseURL: String(rawBase).replace(/\/+$/u, ''),
     timeoutMs: isPositiveInt(config.timeoutMs) ? config.timeoutMs : DEFAULT_TIMEOUT_MS,
     language: config.language,
-    categories: config.categories,
+    categories: config.categories ?? 'web',
     engines: config.engines,
     safeSearch: config.safeSearch,
     extraParams: config.extraParams && typeof config.extraParams === 'object' ? config.extraParams : undefined,
@@ -187,7 +187,48 @@ export class SearxngSearchProvider {
       if (typeof published === 'string' && published.length > 0) source.publishedAt = published
       sources.push(source)
     }
-    return { sources, truncated: false }
+
+    let content = undefined
+    if (Array.isArray(payload?.answers) && payload.answers.length > 0) {
+      const answers = payload.answers.filter((a) => typeof a === 'string' && a.trim().length > 0)
+      if (answers.length > 0) content = answers.join('\n\n')
+    }
+
+    if (Array.isArray(payload?.infoboxes) && payload.infoboxes.length > 0) {
+      for (const info of payload.infoboxes) {
+        const infoContent = typeof info?.content === 'string' ? info.content.trim() : ''
+        if (infoContent && !content) {
+          content = infoContent
+        }
+        if (Array.isArray(info?.urls)) {
+          for (const u of info.urls) {
+            const targetUrl = typeof u?.url === 'string' ? u.url : ''
+            if (!targetUrl || seen.has(targetUrl)) continue
+            seen.add(targetUrl)
+            sources.push({
+              url: targetUrl,
+              ...(u.title ? { title: u.title } : {}),
+              ...(infoContent ? { snippet: infoContent } : {}),
+            })
+          }
+        }
+      }
+    }
+
+    // 引擎异常检测：若完全无搜索结果且 SearXNG 上游引擎报错/挂起，必须显式报错，避免静默失败误导模型
+    if (sources.length === 0 && !content) {
+      const unresp = Array.isArray(payload?.unresponsive_engines) ? payload.unresponsive_engines : []
+      if (unresp.length > 0) {
+        const details = unresp.map(([engine, reason]) => `${engine} (${reason || 'unresponsive'})`).join(', ')
+        throw new WebError(`SearXNG 搜索引擎异常或挂起: ${details}`, PROVIDER_ERROR)
+      }
+    }
+
+    return {
+      ...(content !== undefined ? { content } : {}),
+      sources,
+      truncated: false,
+    }
   }
 }
 
