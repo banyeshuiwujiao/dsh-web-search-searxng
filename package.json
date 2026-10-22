@@ -6,6 +6,34 @@
   "description": "DSH (DeepSeek Harness) web-search provider backed by a self-hosted SearXNG JSON API.",
   "main": "index.mjs",
   "exports": {
-    ".": "./index.mjs"
-  }
+    ".": "./index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-web": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-web": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "web-search",
+    "searxng"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
 }

@@ -26,32 +26,12 @@
  * @module dsh-web-search-searxng
  */
 import { WebError } from '@deepseek-ai/dsh-web'
+import { PROVIDER_ID, resolveOptions, normalizeResults, detectEngineFailure } from './lib/normalize.mjs'
 
-/** Stable id this provider registers under on ctx.web. */
-export const PROVIDER_ID = 'searxng'
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8082'
-const DEFAULT_TIMEOUT_MS = 30000
+export { PROVIDER_ID, resolveOptions, normalizeResults, detectEngineFailure }
 const USER_AGENT = 'dsh-web-search-searxng/1.0'
 const PROVIDER_ERROR = 'WEB_PROVIDER_ERROR'
 const ABORTED = 'WEB_ABORTED'
-
-function isPositiveInt(value) {
-  return Number.isInteger(value) && value > 0
-}
-
-/** Project the row config + env into the options one search will use. */
-function resolveOptions(config) {
-  const rawBase = config.baseURL ?? process.env.DSH_WEB_SEARXNG_BASE_URL ?? DEFAULT_BASE_URL
-  return {
-    baseURL: String(rawBase).replace(/\/+$/u, ''),
-    timeoutMs: isPositiveInt(config.timeoutMs) ? config.timeoutMs : DEFAULT_TIMEOUT_MS,
-    language: config.language,
-    categories: config.categories ?? 'web',
-    engines: config.engines,
-    safeSearch: config.safeSearch,
-    extraParams: config.extraParams && typeof config.extraParams === 'object' ? config.extraParams : undefined,
-  }
-}
 
 /** Merge several AbortSignals into one (no reliance on AbortSignal.any). */
 function anySignal(signals) {
@@ -167,60 +147,13 @@ export class SearxngSearchProvider {
       throw new WebError(`SearXNG returned an unprocessable body: ${String(error)}`, PROVIDER_ERROR, { cause: error })
     }
 
-    const rows = Array.isArray(payload?.results) ? payload.results : []
-    const seen = new Set()
-    const sources = []
-    for (const row of rows) {
-      const url = typeof row?.url === 'string' ? row.url : ''
-      if (url.length === 0 || seen.has(url)) continue
-      seen.add(url)
-      const source = { url }
-      if (typeof row.title === 'string' && row.title.length > 0) source.title = row.title
-      const snippet =
-        typeof row.content === 'string' && row.content.length > 0
-          ? row.content
-          : typeof row.snippet === 'string' && row.snippet.length > 0
-            ? row.snippet
-            : undefined
-      if (snippet !== undefined) source.snippet = snippet
-      const published = row.publishedDate ?? row.pubdate
-      if (typeof published === 'string' && published.length > 0) source.publishedAt = published
-      sources.push(source)
-    }
-
-    let content = undefined
-    if (Array.isArray(payload?.answers) && payload.answers.length > 0) {
-      const answers = payload.answers.filter((a) => typeof a === 'string' && a.trim().length > 0)
-      if (answers.length > 0) content = answers.join('\n\n')
-    }
-
-    if (Array.isArray(payload?.infoboxes) && payload.infoboxes.length > 0) {
-      for (const info of payload.infoboxes) {
-        const infoContent = typeof info?.content === 'string' ? info.content.trim() : ''
-        if (infoContent && !content) {
-          content = infoContent
-        }
-        if (Array.isArray(info?.urls)) {
-          for (const u of info.urls) {
-            const targetUrl = typeof u?.url === 'string' ? u.url : ''
-            if (!targetUrl || seen.has(targetUrl)) continue
-            seen.add(targetUrl)
-            sources.push({
-              url: targetUrl,
-              ...(u.title ? { title: u.title } : {}),
-              ...(infoContent ? { snippet: infoContent } : {}),
-            })
-          }
-        }
-      }
-    }
+    const { content, sources } = normalizeResults(payload)
 
     // 引擎异常检测：若完全无搜索结果且 SearXNG 上游引擎报错/挂起，必须显式报错，避免静默失败误导模型
     if (sources.length === 0 && !content) {
-      const unresp = Array.isArray(payload?.unresponsive_engines) ? payload.unresponsive_engines : []
-      if (unresp.length > 0) {
-        const details = unresp.map(([engine, reason]) => `${engine} (${reason || 'unresponsive'})`).join(', ')
-        throw new WebError(`SearXNG 搜索引擎异常或挂起: ${details}`, PROVIDER_ERROR)
+      const reason = detectEngineFailure(payload)
+      if (reason) {
+        throw new WebError(`SearXNG 搜索引擎异常或挂起: ${reason}`, PROVIDER_ERROR)
       }
     }
 

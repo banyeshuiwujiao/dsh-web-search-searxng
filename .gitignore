@@ -1,0 +1,13 @@
+# 依赖目录：本插件不自带依赖，宿主提供 @deepseek-ai/dsh-web。
+# 机器上常把它做成指向 ~/.dsh/profiles/node_modules 的 junction（DSH 插件以 junction
+# 接线时，Node 按真实路径解析依赖，插件目录下没有 node_modules 就找不到宿主包）。
+# 这是机器特定的接线，不该进版本管理。
+node_modules/
+
+# 手工改配置/模型目录时留的临时备份：回滚路径是 git 历史，不依赖这些文件。
+*.bak-*
+*.bak
+
+# 日志与临时产物
+*.log
+*.tmp
