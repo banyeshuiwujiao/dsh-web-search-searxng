@@ -39,9 +39,11 @@
       config:
         # SearXNG 基址。自建实例的 /search?format=json。
         # 也可用环境变量 DSH_WEB_SEARXNG_BASE_URL 覆盖。
-        # 2026-10-22：指向首尔服务器（tencent-korea-host）的原生 searxng 实例
-        # （已从 docker 迁出，gunicorn 绑 Tailscale IP），走 Tailscale 内网直连。
-        baseURL: http://100.73.103.73:8080
+        # 2026-10-26：首尔机（tencent-korea-host / 100.73.103.73）已于 2026-10-25
+        # 停掉全部代理服务、searxng 已 disable，2026-11-05 到期下线。
+        # 已迁至新机 c20261025912211（Tailscale 100.72.234.100），其 searxng
+        # 直接双监听 127.0.0.1:8080 + 100.72.234.100:8080，无需 SSH 隧道。
+        baseURL: http://100.72.234.100:8080
         # 搜索分类：general / images / news / videos / map / music / it / science…
         categories: web
         # 单次搜索超时（毫秒）。
