@@ -9,8 +9,13 @@ DSH 自带的搜索 provider 只有 `deepseek` / `exa` / `perplexity`。`ctx.web
 provider 注册表，后端换一家就是多一行插件——就是这个文件。
 
 可达性由使用者负责：本 provider 只需要一个能说 SearXNG JSON API 的 base URL。
-打包好的方案把它指向本地 SSH 隧道（`127.0.0.1:8082` → 首尔主机 `127.0.0.1:8080`），
+打包好的方案把它指向新服务器（`c20261025912211`）的 Tailscale IP
+（`http://100.72.234.100:8080`，其 searxng 直接监听在 Tailscale 接口上），
 因此不暴露公网，也不需要 Basic-Auth 凭据。
+
+> 历史：2026-10-25 迁移前指向首尔机（`100.73.103.73`）的原生 searxng 实例
+> （经 127.0.0.1:8080 + SSH 隧道 8082）。首尔机服务已停、2026-11-05 到期下线，
+> 新机 searxng 直接监听 Tailscale IP，故不再需要 SSH 隧道。
 
 ## 行配置（都可省略）
 
@@ -80,12 +85,24 @@ index.mjs          插件主体（注册 provider、发请求、错误映射）
 lib/normalize.mjs  纯逻辑：配置投影 + 结果归一化 + 引擎挂起识别（零宿主依赖）
 test/smoke.mjs     门禁
 cordis.patch.yml   bundle patch：把这一行 insert 放进 profile 即启用
+docs/              修复记录（环境代理把 tailnet 请求丢给死代理那类问题的完整证据链）
 ```
 
 ## 启用
 
 `cordis.patch.yml` 里那行 insert 就是「启用」本身：只有当本包被列进 profile 的
 `dsh.profile.bundles` 时才会应用，所以开关归插件清单，profile 侧不用再写条目。
+
+## 排障
+
+**每次搜索都 `TypeError: fetch failed`，但插件是好的** —— 见
+[docs/2026-10-27-proxy-no-proxy-fix.md](docs/2026-10-27-proxy-no-proxy-fix.md)。
+一句话版：`baseURL` 是 Tailscale 地址，若 `HTTP_PROXY` 指向一个没监听的 loopback 端口、
+而 `NO_PROXY` 又没列这个地址，请求就会被丢给死代理；且 `NO_PROXY` **不认 CIDR**
+（`100.64.0.0/10` 无效，必须写精确 IP），改完要重启宿主才生效。
+
+判据：失败若发生在十几毫秒内，就不是超时，是连接被拒 —— 先看代理，别查接线。
+另外那句报错本身不足以定位：真因在 `error.cause.code` 里，插件目前把它丢掉了（见上文文档「遗留改进」）。
 
 ## License
 
